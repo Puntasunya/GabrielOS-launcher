@@ -1,0 +1,72 @@
+name: Build GabrielOS TV APK
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Extract ZIP & Build Android Project
+        run: |
+          mkdir -p app/src/main/assets
+          mkdir -p app/src/main/java/com/gabrielos.tv
+          
+          # แตกไฟล์ ZIP ออกมาจัดตำแหน่งอัตโนมัติ
+          unzip -o project.zip -d temp_extracted/
+          
+          # ย้ายไฟล์ไปยังโครงสร้าง Android
+          cp temp_extracted/AndroidManifest.xml app/src/main/AndroidManifest.xml
+          cp temp_extracted/MainActivity.java app/src/main/java/com/gabrielos/tv/MainActivity.java
+          cp temp_extracted/index.html app/src/main/assets/index.html
+          
+          # สร้างการตั้งค่า Gradle
+          cat << 'EOF' > settings.gradle
+          rootProject.name = "GabrielOSTV"
+          include ':app'
+          EOF
+
+          cat << 'EOF' > build.gradle
+          buildscript {
+              repositories { google(); mavenCentral() }
+              dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
+          }
+          allprojects {
+              repositories { google(); mavenCentral() }
+          }
+          EOF
+
+          cat << 'EOF' > app/build.gradle
+          plugins { id 'com.android.application' }
+          android {
+              namespace 'com.gabrielos.tv'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.gabrielos.tv"
+                  minSdk 21
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+          }
+          EOF
+
+      - name: Build Debug APK
+        run: |
+          gradle wrapper
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: GabrielOSTV-App
+          path: app/build/outputs/apk/debug/app-debug.apk
